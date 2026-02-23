@@ -63,6 +63,7 @@ class AuthController
 
         // Initialize secure session
         AuthMiddleware::initSession($user);
+        session_regenerate_id(true);
 
         // Generate CSRF token
         $csrfToken = CsrfMiddleware::generateToken();

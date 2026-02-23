@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * SNCS — API Entry Point
  *
- * Bootstraps php-crud-api with middleware chain:
- *   cors → dbAuth → authorization → customControllers
+ * Bootstraps php-crud-api with custom middleware and routing.
+ * Order: RateLimiter -> AuthMiddleware -> CsrfMiddleware -> Custom Controllers | php-crud-api
  *
  * @package App
  */
@@ -15,6 +15,15 @@ require_once __DIR__ . '/config.php';
 
 use Tqdev\PhpCrudApi\Api;
 use Tqdev\PhpCrudApi\Config\Config;
+use App\Helpers\ResponseHelper;
+use App\Middleware\RateLimiter;
+use App\Middleware\AuthMiddleware;
+use App\Middleware\CsrfMiddleware;
+use App\Controllers\AuthController;
+use App\Controllers\CallController;
+use App\Controllers\PatientController;
+use App\Controllers\NurseController;
+use App\Controllers\AdminController;
 
 // ── Session Bootstrap ──────────────────────────────────────
 session_set_cookie_params([
@@ -22,12 +31,90 @@ session_set_cookie_params([
     'path'     => '/',
     'domain'   => '',
     'secure'   => SESSION_CONFIG['secure'],
-    'httponly'  => true,
-    'samesite'  => 'Strict',
+    'httponly' => true,
+    'samesite' => 'Strict',
 ]);
 session_start();
 
-// ── php-crud-api Configuration ─────────────────────────────
+$db = createPDO();
+$requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$method = $_SERVER['REQUEST_METHOD'];
+
+// ── 1. Rate Limiting ────────────────────────────────────────
+if (!RateLimiter::check($db, $requestPath, $_SERVER['REMOTE_ADDR'] ?? '')) {
+    exit; // Response handled by RateLimiter
+}
+
+// ── 2. Authentication ───────────────────────────────────────
+if (!AuthMiddleware::handle($requestPath, $method)) {
+    exit; // Response handled by AuthMiddleware
+}
+
+// ── 3. CSRF Protection ──────────────────────────────────────
+if (!CsrfMiddleware::handle($method)) {
+    exit; // Response handled by CsrfMiddleware
+}
+
+// ── 4. Custom Routing (Priority) ───────────────────────────
+// Auth Routes
+if ($requestPath === '/api/auth/login' && $method === 'POST') {
+    (new AuthController($db))->login($_POST ? $_POST : json_decode(file_get_contents('php://input'), true));
+    exit;
+}
+if ($requestPath === '/api/auth/logout' && $method === 'POST') {
+    (new AuthController($db))->logout();
+    exit;
+}
+if ($requestPath === '/api/auth/session' && $method === 'GET') {
+    (new AuthController($db))->checkSession();
+    exit;
+}
+
+// Patient Routes
+if ($requestPath === '/api/patient/verify' && $method === 'POST') {
+    (new PatientController($db))->verifyToken(json_decode(file_get_contents('php://input'), true));
+    exit;
+}
+if (str_starts_with($requestPath, '/api/patient/call') && $method === 'POST') {
+    (new PatientController($db))->initiateCall(json_decode(file_get_contents('php://input'), true));
+    exit;
+}
+
+// Call Routes
+if ($requestPath === '/api/calls/active' && $method === 'GET') {
+    (new CallController($db))->getActiveCalls();
+    exit;
+}
+if (preg_match('#^/api/calls/(\d+)/accept$#', $requestPath, $matches) && $method === 'POST') {
+    (new CallController($db))->acceptCall((int)$matches[1]);
+    exit;
+}
+if (preg_match('#^/api/calls/(\d+)/complete$#', $requestPath, $matches) && $method === 'POST') {
+    (new CallController($db))->completeCall((int)$matches[1], json_decode(file_get_contents('php://input'), true));
+    exit;
+}
+
+// Nurse Routes
+if ($requestPath === '/api/nurse/profile' && $method === 'GET') {
+    (new NurseController($db))->getProfile();
+    exit;
+}
+if ($requestPath === '/api/nurse/shift/start' && $method === 'POST') {
+    (new NurseController($db))->startShift();
+    exit;
+}
+if ($requestPath === '/api/nurse/shift/end' && $method === 'POST') {
+    (new NurseController($db))->endShift();
+    exit;
+}
+
+// Admin Routes (Partial example, full CRUD handled by php-crud-api below)
+if ($requestPath === '/api/admin/audit' && $method === 'GET') {
+    (new AdminController($db))->getAuditLog();
+    exit;
+}
+
+// ── 5. Standard CRUD (php-crud-api) ────────────────────────
 $config = new Config([
     'driver'   => 'mysql',
     'address'  => DB_CONFIG['host'],
@@ -36,111 +123,39 @@ $config = new Config([
     'username' => DB_CONFIG['username'],
     'password' => DB_CONFIG['password'],
 
-    // ── Middleware Chain ────────────────────────────────────
     'middlewares' => 'cors,dbAuth,authorization,sanitation,multiTenancy',
-
-    // ── CORS ────────────────────────────────────────────────
+    
     'cors.allowedOrigins'  => implode(',', CORS_CONFIG['allowed_origins']),
     'cors.allowHeaders'    => 'Content-Type,X-CSRF-Token,X-Requested-With',
     'cors.allowMethods'    => 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
     'cors.allowCredentials' => 'true',
 
-    // ── dbAuth ──────────────────────────────────────────────
-    'dbAuth.mode'             => 'optional',
-    'dbAuth.usersTable'       => 'users',
-    'dbAuth.usernameColumn'   => 'username',
-    'dbAuth.passwordColumn'   => 'password',
-    'dbAuth.loginAfterRegistration' => 'false',
+    'dbAuth.mode' => 'optional',
+    'dbAuth.usersTable' => 'users',
 
-    // ── Authorization ───────────────────────────────────────
     'authorization.tableHandler' => function ($operation, $tableName) {
-        // Public endpoints: patient_sessions (limited)
-        $publicTables = ['patient_sessions'];
-
-        if (!isset($_SESSION['user'])) {
-            return in_array($tableName, $publicTables, true);
-        }
-
         $role = $_SESSION['user']['role'] ?? '';
-
-        // Superadmin has full access
-        if ($role === 'superadmin') {
-            return true;
-        }
-
-        // Role-based table access
+        if ($role === 'superadmin') return true;
+        
         $roleAccess = [
-            'hospital_admin' => [
-                'hospitals', 'departments', 'rooms', 'users', 'nurses',
-                'nurse_shifts', 'nurse_room_assignments', 'dispatch_queue',
-                'calls', 'patient_sessions', 'escalation_queue', 'audit_log',
-                'events', 'system_settings', 'push_subscriptions',
-            ],
-            'dept_manager' => [
-                'rooms', 'nurses', 'nurse_shifts', 'nurse_room_assignments',
-                'dispatch_queue', 'calls', 'escalation_queue', 'audit_log',
-                'events', 'push_subscriptions',
-            ],
-            'nurse' => [
-                'calls', 'events', 'push_subscriptions',
-            ],
+            'hospital_admin' => ['hospitals', 'departments', 'rooms', 'users', 'nurses', 'nurse_shifts', 'calls', 'audit_log', 'system_settings'],
+            'dept_manager' => ['rooms', 'nurses', 'nurse_shifts', 'calls', 'audit_log'],
+            'nurse' => ['calls'],
         ];
-
-        $allowedTables = $roleAccess[$role] ?? [];
-        return in_array($tableName, $allowedTables, true);
+        
+        return in_array($tableName, $roleAccess[$role] ?? [], true);
     },
 
-    // ── Multi-Tenancy (Row-Level Isolation) ─────────────────
     'multiTenancy.handler' => function ($operation, $tableName) {
-        if (!isset($_SESSION['user']['hospital_id'])) {
-            return [];
-        }
-
-        // Tables with hospital_id column get automatic filtering
-        $tenantTables = [
-            'departments', 'rooms', 'nurses', 'nurse_shifts',
-            'dispatch_queue', 'calls', 'events',
-        ];
-
-        if (in_array($tableName, $tenantTables, true)) {
-            return ['hospital_id' => $_SESSION['user']['hospital_id']];
-        }
-
-        return [];
+        if (!isset($_SESSION['user']['hospital_id'])) return [];
+        $tenantTables = ['departments', 'rooms', 'nurses', 'nurse_shifts', 'calls', 'events'];
+        return in_array($tableName, $tenantTables, true) ? ['hospital_id' => $_SESSION['user']['hospital_id']] : [];
     },
 
-    // ── Sanitation ──────────────────────────────────────────
     'sanitation.handler' => function ($operation, $tableName, $column, $value) {
-        if (is_string($value)) {
-            return htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        }
-        return $value;
-    },
-
-    // ── Column Hiding ───────────────────────────────────────
-    'authorization.columnHandler' => function ($operation, $tableName, $columnName) {
-        // Never expose password hashes
-        $hiddenColumns = [
-            'users' => ['password'],
-        ];
-
-        if (isset($hiddenColumns[$tableName])) {
-            return !in_array($columnName, $hiddenColumns[$tableName], true);
-        }
-
-        return true;
+        return is_string($value) ? htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8') : $value;
     },
 ]);
 
-// ── Run API ────────────────────────────────────────────────
 $api = new Api($config);
-$response = $api->handle(ServerRequestFactory::fromGlobals());
-
-// ── Emit Response ──────────────────────────────────────────
-http_response_code($response->getStatusCode());
-foreach ($response->getHeaders() as $name => $values) {
-    foreach ($values as $value) {
-        header(sprintf('%s: %s', $name, $value), false);
-    }
-}
-echo $response->getBody();
+$api->handleCommand();
