@@ -1,0 +1,51 @@
+# =====================================================
+# SNCS WebSocket Server — Hardening Configuration v1.3
+# =====================================================
+# This file documents the hardening parameters for the
+# Ratchet WebSocket server deployment.
+# =====================================================
+
+# ── Connection Limits ────────────────────────────────
+MAX_CONNECTIONS=500
+WARN_THRESHOLD=400
+# Return HTTP 503 + Retry-After:30 when > WARN_THRESHOLD
+
+# ── Message Limits ───────────────────────────────────
+MAX_PENDING_MESSAGES=100
+# Per connection. Drop oldest non-critical when exceeded.
+
+# ── Polling ──────────────────────────────────────────
+POLL_INTERVAL_MS=500
+POLL_BATCH_SIZE=50
+# Incremental poll: WHERE id > last_id ORDER BY id ASC LIMIT 50
+
+# ── Memory Management ───────────────────────────────
+MEMORY_RESTART_THRESHOLD=80
+# Restart server when memory_get_usage(true) exceeds 80% of memory_limit.
+# /healthz returns memory_pct for monitoring.
+
+# ── Session Handling ─────────────────────────────────
+SESSION_CHECK_INTERVAL_SEC=30
+# Validate all connected sessions every 30 seconds.
+# Disconnect unauthenticated connections older than 30 seconds.
+
+# ── Escalation Timeouts ─────────────────────────────
+ESCALATION_L1_SEC=90
+ESCALATION_L2_SEC=180
+ESCALATION_L3_SEC=300
+# L1: next floor nurse → priority += 1
+# L2: dept manager     → priority += 2
+# L3: system admin     → priority += 5
+
+# ── Graceful Shutdown ────────────────────────────────
+# SIGTERM → broadcast 'server_shutdown' to all clients → 10s drain → exit(0)
+# All pending messages are flushed before drain timeout.
+
+# ── TLS / WSS ────────────────────────────────────────
+REQUIRE_WSS=true
+# All WebSocket connections must use WSS:// in production.
+# Terminated at reverse proxy (nginx/Apache) level.
+
+# ── Health Endpoints ─────────────────────────────────
+# /healthz → { "status": "ok", "connections": N, "memory_pct": X }
+# /ws-health → same as /healthz (alias)
