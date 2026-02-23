@@ -1,0 +1,74 @@
+# ============================================================
+# SNCS — Apache .htaccess
+# Security Headers + HTTPS Redirect + URL Rewriting
+# ============================================================
+
+# ── URL Rewriting ────────────────────────────────────────────
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Force HTTPS in production
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP_HOST} !^localhost
+    RewriteCond %{HTTP_HOST} !^127\.0\.0\.1
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Route all requests to api.php (front controller)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ api.php [QSA,L]
+</IfModule>
+
+# ── Security Headers ────────────────────────────────────────
+<IfModule mod_headers.c>
+    # Prevent MIME-type sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Prevent clickjacking
+    Header always set X-Frame-Options "DENY"
+
+    # XSS Protection (legacy browsers)
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Content Security Policy
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' wss:; frame-ancestors 'none'"
+
+    # Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # HSTS — 1 year, include subdomains
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # Permissions Policy
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+
+    # Remove server signature
+    Header unset Server
+    Header unset X-Powered-By
+</IfModule>
+
+# ── Prevent access to sensitive files ────────────────────────
+<FilesMatch "\.(env|sql|md|log|sh|txt)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+</FilesMatch>
+
+# ── Disable directory listing ────────────────────────────────
+Options -Indexes
+
+# ── PHP Configuration ────────────────────────────────────────
+<IfModule mod_php.c>
+    php_flag display_errors Off
+    php_flag log_errors On
+    php_value error_log "../logs/php_errors.log"
+    php_value session.cookie_httponly 1
+    php_value session.cookie_secure 1
+    php_value session.cookie_samesite "Strict"
+    php_value session.use_strict_mode 1
+    php_value session.gc_maxlifetime 3600
+    php_value max_execution_time 30
+    php_value memory_limit 128M
+    php_value upload_max_filesize 5M
+    php_value post_max_size 10M
+</IfModule>
