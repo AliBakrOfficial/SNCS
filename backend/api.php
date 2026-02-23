@@ -93,11 +93,13 @@ if ($requestPath === '/api/patient/call' && $method === 'POST') {
 
 // ── Call Routes ─────────────────────────────────────────────
 if ($requestPath === '/api/calls' && $method === 'POST') {
-    (new CallController($db))->create(getJsonBody());
+    $result = (new CallController($db))->create(getJsonBody());
+    ResponseHelper::success($result, 201);
     exit;
 }
 if ($requestPath === '/api/calls/active' && $method === 'GET') {
-    (new CallController($db))->getActiveCalls($_GET);
+    $calls = (new CallController($db))->getActiveCalls($_GET);
+    ResponseHelper::success($calls);
     exit;
 }
 if (preg_match('#^/api/calls/(\d+)/accept$#', $requestPath, $m) && $method === 'POST') {
