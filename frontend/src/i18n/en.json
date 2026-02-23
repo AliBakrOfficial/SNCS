@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "Smart Nurse Calling System",
+    "subtitle": "SNCS — نظام نداء التمريض الذكي"
+  },
+  "auth": {
+    "login": "Login",
+    "logout": "Logout",
+    "username": "Username",
+    "password": "Password",
+    "loginBtn": "Sign In",
+    "loginError": "Invalid username or password"
+  },
+  "patient": {
+    "callNurse": "Call Nurse",
+    "callSent": "Call Sent",
+    "waitMessage": "Please wait, a nurse is on the way",
+    "scanQr": "Scan room QR code",
+    "sessionExpired": "Session expired — please re-scan QR"
+  },
+  "nurse": {
+    "dashboard": "Dashboard",
+    "activeCalls": "Active Calls",
+    "accept": "Accept",
+    "arrive": "Arrived",
+    "complete": "Complete",
+    "noCalls": "No active calls"
+  },
+  "admin": {
+    "panel": "Admin Panel",
+    "rooms": "Rooms",
+    "wards": "Departments",
+    "staff": "Staff",
+    "auditLog": "Audit Log",
+    "reports": "Reports"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "success": "Operation successful",
+    "noData": "No data available",
+    "connectionLost": "Connection lost — reconnecting"
+  }
+}

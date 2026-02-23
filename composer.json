@@ -1,0 +1,23 @@
+{
+    "name": "sncs/smart-nurse-calling-system",
+    "description": "Smart Nurse Calling System — Real-time nurse dispatch with WebSocket and PWA",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "mevdschee/php-crud-api": "^2",
+        "cboden/ratchet": "^0.4",
+        "vlucas/phpdotenv": "^5.6",
+        "endroid/qr-code": "^5",
+        "minishlink/web-push": "^8"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "backend/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

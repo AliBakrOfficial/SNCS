@@ -1,0 +1,48 @@
+{
+  "app": {
+    "title": "نظام نداء التمريض الذكي",
+    "subtitle": "SNCS — Smart Nurse Calling System"
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "logout": "تسجيل الخروج",
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+    "loginBtn": "دخول",
+    "loginError": "خطأ في اسم المستخدم أو كلمة المرور"
+  },
+  "patient": {
+    "callNurse": "اتصل بالممرض",
+    "callSent": "تم إرسال النداء",
+    "waitMessage": "يرجى الانتظار، الممرض في الطريق",
+    "scanQr": "امسح رمز QR للغرفة",
+    "sessionExpired": "انتهت الجلسة — يرجى إعادة مسح QR"
+  },
+  "nurse": {
+    "dashboard": "لوحة التحكم",
+    "activeCalls": "النداءات النشطة",
+    "accept": "قبول",
+    "arrive": "وصلت",
+    "complete": "إنهاء",
+    "noCalls": "لا توجد نداءات حالياً"
+  },
+  "admin": {
+    "panel": "لوحة الإدارة",
+    "rooms": "الغرف",
+    "wards": "الأقسام",
+    "staff": "الكادر",
+    "auditLog": "سجل الأحداث",
+    "reports": "التقارير"
+  },
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "loading": "جارٍ التحميل...",
+    "error": "حدث خطأ",
+    "success": "تمت العملية بنجاح",
+    "noData": "لا توجد بيانات",
+    "connectionLost": "تم فقدان الاتصال — جارٍ إعادة المحاولة"
+  }
+}

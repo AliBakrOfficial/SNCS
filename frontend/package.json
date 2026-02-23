@@ -1,0 +1,28 @@
+{
+  "name": "sncs-frontend",
+  "version": "1.0.0",
+  "description": "SNCS Frontend — Quasar v2 PWA",
+  "productName": "SNCS نظام نداء التمريض",
+  "author": "SNCS Team",
+  "private": true,
+  "scripts": {
+    "dev": "quasar dev",
+    "build": "quasar build",
+    "lint": "eslint --ext .js,.vue src/"
+  },
+  "dependencies": {
+    "@quasar/extras": "^1.16.0",
+    "axios": "^1.7.0",
+    "pinia": "^2.1.0",
+    "quasar": "^2.14.0",
+    "vue": "^3.4.0",
+    "vue-i18n": "^9.9.0",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@quasar/app-vite": "^1.8.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.23.0",
+    "prettier": "^3.2.0"
+  }
+}

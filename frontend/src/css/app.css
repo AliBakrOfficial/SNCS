@@ -1,0 +1,27 @@
+/* ══════════════════════════════════════════
+   SNCS — Global Styles
+   ══════════════════════════════════════════ */
+
+:root {
+  --bg-primary: #ffffff;
+  --text-main: #1a1a2e;
+  --card-bg: #f8f9fa;
+  --border-color: #e0e0e0;
+  --accent: #1b4f8a;
+  --accent-light: #2d6ab4;
+  --success: #27ae60;
+  --danger: #e74c3c;
+  --warning: #f39c12;
+}
+
+.body--dark {
+  --bg-primary: #121212;
+  --text-main: #e0e0e0;
+  --card-bg: #1e1e2e;
+  --border-color: #333344;
+}
+
+body {
+  font-family: "Cairo", "Inter", sans-serif;
+  direction: rtl;
+}
