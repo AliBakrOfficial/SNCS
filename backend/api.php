@@ -83,7 +83,7 @@ if ($requestPath === '/api/auth/session' && $method === 'GET') {
 
 // ── Patient Routes ──────────────────────────────────────────
 if ($requestPath === '/api/patient/verify' && $method === 'POST') {
-    (new PatientController($db))->verifyToken(getJsonBody());
+    (new PatientController($db))->verifyQr(getJsonBody());
     exit;
 }
 if ($requestPath === '/api/patient/call' && $method === 'POST') {
