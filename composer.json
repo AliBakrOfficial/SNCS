@@ -13,7 +13,11 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "backend/"
+            "App\\Controllers\\": "backend/controllers/",
+            "App\\Middleware\\":  "backend/middleware/",
+            "App\\Services\\":   "backend/services/",
+            "App\\Helpers\\":    "backend/helpers/",
+            "App\\Websocket\\":  "backend/websocket/"
         }
     },
     "config": {

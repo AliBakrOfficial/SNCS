@@ -237,3 +237,14 @@ CREATE TABLE push_subscriptions (
     created_at DATETIME     DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ------------------------------------------------------------
+
+CREATE TABLE rate_limits (
+    id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    ip             VARCHAR(45)     NOT NULL,
+    endpoint_group VARCHAR(100)    NOT NULL,
+    created_at     DATETIME(3)     NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_ip_group_time (ip, endpoint_group, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

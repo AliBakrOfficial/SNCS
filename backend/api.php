@@ -36,29 +36,40 @@ session_set_cookie_params([
 ]);
 session_start();
 
-$db = createPDO();
+/**
+ * Read JSON body from php://input.
+ *
+ * @return array<string, mixed>
+ */
+function getJsonBody(): array
+{
+    return json_decode(file_get_contents('php://input'), true) ?? [];
+}
+
+$db          = createPDO();
 $requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-$method = $_SERVER['REQUEST_METHOD'];
+$method      = $_SERVER['REQUEST_METHOD'];
 
 // ── 1. Rate Limiting ────────────────────────────────────────
 if (!RateLimiter::check($db, $requestPath, $_SERVER['REMOTE_ADDR'] ?? '')) {
-    exit; // Response handled by RateLimiter
+    exit;
 }
 
 // ── 2. Authentication ───────────────────────────────────────
 if (!AuthMiddleware::handle($requestPath, $method)) {
-    exit; // Response handled by AuthMiddleware
+    exit;
 }
 
 // ── 3. CSRF Protection ──────────────────────────────────────
 if (!CsrfMiddleware::handle($method)) {
-    exit; // Response handled by CsrfMiddleware
+    exit;
 }
 
-// ── 4. Custom Routing (Priority) ───────────────────────────
-// Auth Routes
+// ── 4. Custom Routing ──────────────────────────────────────
+
+// ── Auth Routes ─────────────────────────────────────────────
 if ($requestPath === '/api/auth/login' && $method === 'POST') {
-    (new AuthController($db))->login($_POST ? $_POST : json_decode(file_get_contents('php://input'), true));
+    (new AuthController($db))->login(getJsonBody());
     exit;
 }
 if ($requestPath === '/api/auth/logout' && $method === 'POST') {
@@ -70,33 +81,46 @@ if ($requestPath === '/api/auth/session' && $method === 'GET') {
     exit;
 }
 
-// Patient Routes
+// ── Patient Routes ──────────────────────────────────────────
 if ($requestPath === '/api/patient/verify' && $method === 'POST') {
-    (new PatientController($db))->verifyToken(json_decode(file_get_contents('php://input'), true));
+    (new PatientController($db))->verifyToken(getJsonBody());
     exit;
 }
-if (str_starts_with($requestPath, '/api/patient/call') && $method === 'POST') {
-    (new PatientController($db))->initiateCall(json_decode(file_get_contents('php://input'), true));
+if ($requestPath === '/api/patient/call' && $method === 'POST') {
+    (new PatientController($db))->initiateCall(getJsonBody());
     exit;
 }
 
-// Call Routes
+// ── Call Routes ─────────────────────────────────────────────
+if ($requestPath === '/api/calls' && $method === 'POST') {
+    (new CallController($db))->create(getJsonBody());
+    exit;
+}
 if ($requestPath === '/api/calls/active' && $method === 'GET') {
-    (new CallController($db))->getActiveCalls();
+    (new CallController($db))->getActiveCalls($_GET);
     exit;
 }
-if (preg_match('#^/api/calls/(\d+)/accept$#', $requestPath, $matches) && $method === 'POST') {
-    (new CallController($db))->acceptCall((int)$matches[1]);
+if (preg_match('#^/api/calls/(\d+)/accept$#', $requestPath, $m) && $method === 'POST') {
+    (new CallController($db))->updateStatus((int)$m[1], 'accept');
     exit;
 }
-if (preg_match('#^/api/calls/(\d+)/complete$#', $requestPath, $matches) && $method === 'POST') {
-    (new CallController($db))->completeCall((int)$matches[1], json_decode(file_get_contents('php://input'), true));
+if (preg_match('#^/api/calls/(\d+)/arrive$#', $requestPath, $m) && $method === 'POST') {
+    (new CallController($db))->updateStatus((int)$m[1], 'arrive');
+    exit;
+}
+if (preg_match('#^/api/calls/(\d+)/complete$#', $requestPath, $m) && $method === 'POST') {
+    $body = getJsonBody();
+    (new CallController($db))->updateStatus((int)$m[1], 'complete', $body['notes'] ?? '');
+    exit;
+}
+if (preg_match('#^/api/calls/(\d+)/cancel$#', $requestPath, $m) && $method === 'POST') {
+    (new CallController($db))->updateStatus((int)$m[1], 'cancel');
     exit;
 }
 
-// Nurse Routes
+// ── Nurse Routes ────────────────────────────────────────────
 if ($requestPath === '/api/nurse/profile' && $method === 'GET') {
-    (new NurseController($db))->getProfile();
+    (new NurseController($db))->profile();
     exit;
 }
 if ($requestPath === '/api/nurse/shift/start' && $method === 'POST') {
@@ -107,14 +131,73 @@ if ($requestPath === '/api/nurse/shift/end' && $method === 'POST') {
     (new NurseController($db))->endShift();
     exit;
 }
-
-// Admin Routes (Partial example, full CRUD handled by php-crud-api below)
-if ($requestPath === '/api/admin/audit' && $method === 'GET') {
-    (new AdminController($db))->getAuditLog();
+if ($requestPath === '/api/nurse/rooms' && $method === 'GET') {
+    (new NurseController($db))->getAssignments();
+    exit;
+}
+if ($requestPath === '/api/nurse/exclude' && $method === 'POST') {
+    (new NurseController($db))->toggleExclusion(getJsonBody());
     exit;
 }
 
-// ── 5. Standard CRUD (php-crud-api) ────────────────────────
+// ── Admin Routes ────────────────────────────────────────────
+if ($requestPath === '/api/admin/hospitals' && $method === 'GET') {
+    (new AdminController($db))->listHospitals();
+    exit;
+}
+if ($requestPath === '/api/admin/hospitals' && $method === 'POST') {
+    (new AdminController($db))->createHospital(getJsonBody());
+    exit;
+}
+if ($requestPath === '/api/admin/departments' && $method === 'GET') {
+    (new AdminController($db))->listDepartments();
+    exit;
+}
+if ($requestPath === '/api/admin/departments' && $method === 'POST') {
+    (new AdminController($db))->createDepartment(getJsonBody());
+    exit;
+}
+if (preg_match('#^/api/admin/rooms/(\d+)$#', $requestPath, $m) && $method === 'GET') {
+    (new AdminController($db))->listRooms((int)$m[1]);
+    exit;
+}
+if ($requestPath === '/api/admin/rooms' && $method === 'POST') {
+    (new AdminController($db))->createRoom(getJsonBody());
+    exit;
+}
+if ($requestPath === '/api/admin/staff' && $method === 'GET') {
+    (new AdminController($db))->listStaff($_GET['role'] ?? null);
+    exit;
+}
+if ($requestPath === '/api/admin/staff' && $method === 'POST') {
+    (new AdminController($db))->createStaff(getJsonBody());
+    exit;
+}
+if ($requestPath === '/api/admin/settings' && $method === 'GET') {
+    (new AdminController($db))->getSettings();
+    exit;
+}
+if ($requestPath === '/api/admin/settings' && $method === 'PUT') {
+    (new AdminController($db))->updateSetting(getJsonBody());
+    exit;
+}
+if ($requestPath === '/api/admin/audit' && $method === 'GET') {
+    (new AdminController($db))->getAuditLog($_GET);
+    exit;
+}
+
+// ── Health Check ────────────────────────────────────────────
+if ($requestPath === '/healthz' && $method === 'GET') {
+    try {
+        $db->query('SELECT 1');
+        ResponseHelper::success(['status' => 'ok']);
+    } catch (\Exception $e) {
+        ResponseHelper::error('Database unreachable', 503);
+    }
+    exit;
+}
+
+// ── 5. Standard CRUD (php-crud-api fallback) ────────────────
 $config = new Config([
     'driver'   => 'mysql',
     'address'  => DB_CONFIG['host'],
@@ -124,36 +207,51 @@ $config = new Config([
     'password' => DB_CONFIG['password'],
 
     'middlewares' => 'cors,dbAuth,authorization,sanitation,multiTenancy',
-    
-    'cors.allowedOrigins'  => implode(',', CORS_CONFIG['allowed_origins']),
-    'cors.allowHeaders'    => 'Content-Type,X-CSRF-Token,X-Requested-With',
-    'cors.allowMethods'    => 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
+
+    'cors.allowedOrigins'   => implode(',', CORS_CONFIG['allowed_origins']),
+    'cors.allowHeaders'     => 'Content-Type,X-CSRF-Token,X-Requested-With',
+    'cors.allowMethods'     => 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
     'cors.allowCredentials' => 'true',
 
-    'dbAuth.mode' => 'optional',
+    'dbAuth.mode'       => 'optional',
     'dbAuth.usersTable' => 'users',
 
     'authorization.tableHandler' => function ($operation, $tableName) {
         $role = $_SESSION['user']['role'] ?? '';
-        if ($role === 'superadmin') return true;
-        
+        if ($role === 'superadmin') {
+            return true;
+        }
+
         $roleAccess = [
-            'hospital_admin' => ['hospitals', 'departments', 'rooms', 'users', 'nurses', 'nurse_shifts', 'calls', 'audit_log', 'system_settings'],
-            'dept_manager' => ['rooms', 'nurses', 'nurse_shifts', 'calls', 'audit_log'],
+            'hospital_admin' => [
+                'hospitals', 'departments', 'rooms', 'users', 'nurses',
+                'nurse_shifts', 'calls', 'audit_log', 'system_settings',
+            ],
+            'dept_manager' => [
+                'rooms', 'nurses', 'nurse_shifts', 'calls', 'audit_log',
+            ],
             'nurse' => ['calls'],
         ];
-        
+
         return in_array($tableName, $roleAccess[$role] ?? [], true);
     },
 
     'multiTenancy.handler' => function ($operation, $tableName) {
-        if (!isset($_SESSION['user']['hospital_id'])) return [];
-        $tenantTables = ['departments', 'rooms', 'nurses', 'nurse_shifts', 'calls', 'events'];
-        return in_array($tableName, $tenantTables, true) ? ['hospital_id' => $_SESSION['user']['hospital_id']] : [];
+        if (!isset($_SESSION['user']['hospital_id'])) {
+            return [];
+        }
+        $tenantTables = [
+            'departments', 'rooms', 'nurses', 'nurse_shifts', 'calls', 'events',
+        ];
+        return in_array($tableName, $tenantTables, true)
+            ? ['hospital_id' => $_SESSION['user']['hospital_id']]
+            : [];
     },
 
     'sanitation.handler' => function ($operation, $tableName, $column, $value) {
-        return is_string($value) ? htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8') : $value;
+        return is_string($value)
+            ? htmlspecialchars($value, ENT_QUOTES | ENT_HTML5, 'UTF-8')
+            : $value;
     },
 ]);
 

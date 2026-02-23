@@ -151,10 +151,10 @@ class CallController
      */
     private function assignCallWithLock(int $deptId, int $callId): array
     {
-        $lockName = "sncs_assign_dept_{$deptId}";
+        $lockName = 'sncs_assign_dept_' . abs((int)$deptId);
 
         // Acquire lock (3 second timeout)
-        $acquired = $this->db->query("SELECT GET_LOCK('{$lockName}', 3) AS result")->fetch();
+        $acquired = $this->db->query("SELECT GET_LOCK('" . $lockName . "', 3) AS result")->fetch();
 
         if (!$acquired || (int)$acquired['result'] !== 1) {
             ResponseHelper::error('Service busy — please retry', 423);

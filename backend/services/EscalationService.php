@@ -93,7 +93,7 @@ class EscalationService
             $stmt = $this->db->prepare(
                 "SELECT c.id, c.dept_id, c.hospital_id, c.nurse_id
                  FROM calls c
-                 JOIN escalation_queue eq_prev ON c.id = eq_prev.call_id AND eq_prev.level = {$prevLevel}
+                 JOIN escalation_queue eq_prev ON c.id = eq_prev.call_id AND eq_prev.level = ?
                  LEFT JOIN escalation_queue eq_curr ON c.id = eq_curr.call_id AND eq_curr.level = ?
                  WHERE c.status IN ('pending', 'assigned', 'in_progress', 'escalated')
                    AND c.initiated_at < DATE_SUB(NOW(3), INTERVAL ? SECOND)
@@ -101,7 +101,7 @@ class EscalationService
             );
         }
 
-        $stmt->execute([$level, $timeoutSec]);
+        $stmt->execute($level === 1 ? [$level, $timeoutSec] : [$prevLevel, $level, $timeoutSec]);
         return $stmt->fetchAll();
     }
 
