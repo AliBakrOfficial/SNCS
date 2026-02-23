@@ -1,8 +1,6 @@
 # SNCS — Final Implementation Walkthrough
 
-The **Smart Nurse Calling System (SNCS)** is now fully scaffolded and implemented across all 11 phases. This walkthrough summarizes the work completed and the verification performed.
-
-## 🚀 System Architecture
+## System Architecture
 
 ```mermaid
 graph TD
@@ -15,60 +13,71 @@ graph TD
     WS -->|Broadcast| Client
 ```
 
-## ✅ Completed Phases
+## Completed Phases
 
-| Phase  | Description    | Key Deliverables                                           |
-| :----- | :------------- | :--------------------------------------------------------- |
-| **1**  | Scaffolding    | `.env.example`, `composer.json`, `quasar.config.js`        |
-| **2**  | Database Layer | 15 tables, 3 stored procedures with deadlock retry         |
-| **3**  | Backend Core   | `config.php`, `api.php` (security-first), `ResponseHelper` |
-| **4**  | Controllers    | 5 domain controllers (Auth, Call, Patient, Nurse, Admin)   |
-| **5**  | Services       | QR, Push (VAPID), Audit, Escalation, Event services        |
-| **6**  | WebSockets     | Ratchet server with 500ms polling and hardening            |
-| **7**  | Frontend       | Full Quasar PWA (Login, Dashboard, Patient, Admin)         |
-| **8**  | Load Testing   | 3 k6 scenarios (Staging, Production, Stress)               |
-| **9**  | Hardening      | PSR-7 removal, Rate Limiting, CSRF, Secure Sessions        |
-| **10** | Operations     | `README-DEV.md`, runbooks, and utility scripts             |
-| **11** | Validation     | System-wide syntax, security, and schema checks            |
-
-## 🛡️ Security & Hardening
-
-The system implements the high-security requirements specified:
-
-- **No PSR-7:** `api.php` uses plain PHP for maximum performance and compatibility.
-- **Middleware Chain:** `RateLimiter` → `AuthMiddleware` → `CsrfMiddleware`.
-- **Session Security:** `session_regenerate_id(true)`, `HttpOnly`, `Secure`, `SameSite=Strict`.
-- **Headers:** Full CSP, HSTS, X-Frame-Options, and sensitive file protection in `.htaccess`.
-- **Verification:** `SELECT *` and `$_GET` usage are eliminated and replaced with sanitized, column-specific implementation.
-
-## 📊 Verification Results
-
-### Backend Integrity
-
-The following command was run to verify all 60+ files:
-
-```bash
-find backend/ -name "*.php" -exec php -l {} \;
-```
-
-**Result:** `No syntax errors detected` in all files.
-
-### Security Scan
-
-Custom grep checks confirmed zero hits for:
-
-- ❌ `SELECT *` (All queries are column-explicit)
-- ❌ Unsanitized `$_GET` usage (All inputs routed through `api.php` or `json_decode`)
-
-## 📖 Operational Files
-
-- [README-DEV.md](file:///f:/Dev/SNCS/README-DEV.md) — Setup and architecture guide.
-- [operational-capacity.md](file:///f:/Dev/SNCS/runbooks/operational-capacity.md) — Capacity thresholds and incident response.
-- [db-migrate.sh](file:///f:/Dev/SNCS/scripts/db-migrate.sh) — One-click database deployment.
-- [start-ws.sh](file:///f:/Dev/SNCS/scripts/start-ws.sh) — WebSocket server lifecycle management.
+| Phase  | Description  | Key Deliverables                                      |
+| :----- | :----------- | :---------------------------------------------------- |
+| **1**  | Scaffolding  | `.env.example`, `composer.json`, `quasar.config.js`   |
+| **2**  | Database     | 16 tables (incl. `rate_limits`), 3 stored procedures  |
+| **3**  | Backend Core | `config.php`, `api.php`, `ResponseHelper`             |
+| **4**  | Controllers  | 5 controllers: Auth, Call, Patient, Nurse, Admin      |
+| **5**  | Services     | QR (HMAC), Push (VAPID), Audit, Escalation, Event     |
+| **6**  | WebSockets   | Ratchet server with 500ms polling + hardening         |
+| **7**  | Frontend     | Full Quasar PWA (Login, Dashboard, Patient, Admin)    |
+| **8**  | Load Tests   | 3 k6 scenarios (Staging, Production, Stress)          |
+| **9**  | Hardening    | Rate Limiting, CSRF, Auth middleware, secure sessions |
+| **10** | Operations   | `README-DEV.md`, runbooks, utility scripts            |
+| **11** | Validation   | Full code review, bug fixes, final verification       |
 
 ---
 
-### 🎊 Project Complete
+## Code Review Fixes (Phase 11)
 
-All items in the checklist are confirmed. The system is ready for the first deployment phase.
+A deep code review of the actual ZIP identified **4 critical bugs** and **6 warnings**. All were fixed in commit `6b46c1b`.
+
+### Critical Fixes
+
+| Bug        | File                                                                                | Fix                                                                            |
+| :--------- | :---------------------------------------------------------------------------------- | :----------------------------------------------------------------------------- |
+| **BUG-01** | [schema.sql](file:///f:/Dev/SNCS/backend/db/schema.sql)                             | Added missing `rate_limits` table (RateLimiter depended on it)                 |
+| **BUG-02** | [api.php](file:///f:/Dev/SNCS/backend/api.php)                                      | Added **25+ routes** — all Admin, Call, Nurse, Patient endpoints now reachable |
+| **BUG-03** | [composer.json](file:///f:/Dev/SNCS/composer.json)                                  | Explicit PSR-4 namespace mappings to fix Linux case-sensitivity                |
+| **BUG-04** | [EscalationService.php](file:///f:/Dev/SNCS/backend/services/EscalationService.php) | SQL injection fix — `{$prevLevel}` → bound `?` parameter                       |
+
+### Warning Fixes
+
+| Warning        | Fix                                                                                                  |
+| :------------- | :--------------------------------------------------------------------------------------------------- |
+| **WARN-01/02** | All Call (`create`, `arrive`, `cancel`) and Nurse (`getAssignments`, `toggleExclusion`) routes added |
+| **WARN-03**    | GET_LOCK in CallController uses `abs((int)$deptId)` whitelist approach                               |
+
+---
+
+## Verification Results
+
+| Check                                | Result                                                     |
+| :----------------------------------- | :--------------------------------------------------------- |
+| `git diff --name-only HEAD -- docs/` | ✅ Empty — docs untouched                                  |
+| PHP lint (all `.php` files)          | ✅ Zero syntax errors                                      |
+| `SELECT *` grep                      | ✅ Empty — all queries column-explicit                     |
+| SQL interpolation audit              | ✅ All remaining `{$...}` are safe (echo/headers/internal) |
+
+## Code Review v2 Fixes
+
+| Bug            | Fix                                                                                               |
+| :------------- | :------------------------------------------------------------------------------------------------ |
+| **BUG-NEW-01** | `create()` return ignored → now sends `201` with body via `ResponseHelper::success($result, 201)` |
+| **BUG-NEW-02** | `getActiveCalls()` return ignored → now sends call list to nurse dashboard                        |
+
+---
+
+## Git History
+
+```
+91f2b83 feat(security): fix call response handling in api.php routing
+b199fae chore(final): project complete - all phases verified
+6b46c1b feat(security): apply hardening fixes — rate_limits, autoload, SQL injection, full routing
+1ac0b77 docs: add implementation walkthrough to .plan
+42efaa0 feat(security): apply full hardening checklist from security.md
+3f36760 chore(ops): add runbooks, dev README, and utility scripts
+```
